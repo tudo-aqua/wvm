@@ -21,10 +21,7 @@ package tools.aqua.wvm.machine
 import java.math.BigInteger
 import java.util.Scanner
 import tools.aqua.wvm.analysis.semantics.StatementApp
-import tools.aqua.wvm.language.BooleanExpression
-import tools.aqua.wvm.language.SequenceOfStatements
-import tools.aqua.wvm.language.Statement
-import tools.aqua.wvm.language.True
+import tools.aqua.wvm.language.*
 
 data class Context(
     val scope: Scope,
@@ -59,11 +56,11 @@ data class Context(
     return trace
   }
 
-  private fun initMemForScope(): Memory<BigInteger> {
-    var mem = Memory(Array(scope.size) { BigInteger.ZERO })
+  private fun initMemForScope(): Memory<ArithmeticExpression> {
+    var mem = Memory(Array(scope.size) { NumericLiteral(BigInteger.ZERO) as ArithmeticExpression })
     scope.symbols.values
         .filter { it.size > 1 }
-        .forEach { mem = mem.write(it.address, it.address.toBigInteger().plus(BigInteger.ONE)) }
+        .forEach { mem = mem.write(it.address, NumericLiteral(it.address.toBigInteger().plus(BigInteger.ONE))) }
     return mem
   }
 

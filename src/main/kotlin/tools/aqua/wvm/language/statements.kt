@@ -122,20 +122,23 @@ data class Assertion(val cond: BooleanExpression) : Statement {
             this,
             Transition(
                 cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)))
-
-    return if (b.result)
+    return when(b.result) {
+      True ->
         AssertOK(
-            b as BooleanExpressionOk,
-            Transition(
-                cfg,
-                dst =
-                    Configuration(
-                        SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory)))
-    else
+          b as BooleanExpressionOk,
+          Transition(
+            cfg,
+            dst =
+            Configuration(
+              SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory)))
+      False ->
         AssertErr(
-            b as BooleanExpressionOk,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true)))
+          b as BooleanExpressionOk,
+          Transition(
+            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true)))
+      else -> throw Exception("Symbolic Assertions not handled yet")
+    }
+
   }
 
   override fun toIndentedString(indent: String) = "${indent}assert $cond;"
@@ -157,28 +160,31 @@ data class IfThenElse(
             Transition(
                 cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)))
 
-    return if (b.result)
+    return when(b.result) {
+      True ->
         IfTrue(
-            b as BooleanExpressionOk,
-            this,
-            Transition(
-                cfg,
-                dst =
-                    Configuration(
-                        concat(thenBlock.statements, cfg.statements.tail()),
-                        cfg.scope,
-                        cfg.memory)))
-    else
+          b as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg,
+            dst =
+            Configuration(
+              concat(thenBlock.statements, cfg.statements.tail()),
+              cfg.scope,
+              cfg.memory)))
+      False ->
         IfFalse(
-            b as BooleanExpressionOk,
-            this,
-            Transition(
-                cfg,
-                dst =
-                    Configuration(
-                        concat(elseBlock.statements, cfg.statements.tail()),
-                        cfg.scope,
-                        cfg.memory)))
+          b as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg,
+            dst =
+            Configuration(
+              concat(elseBlock.statements, cfg.statements.tail()),
+              cfg.scope,
+              cfg.memory)))
+      else -> throw Exception("Symbolic If-Condition not handled yet")
+    }
   }
 
   override fun toIndentedString(indent: String) =
@@ -200,49 +206,76 @@ data class While(
     val invar = invariant.evaluate(cfg.scope, cfg.memory)
 
     if (cond is Error)
-        NestedStatementError(
-            "IfErr",
-            cond,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)))
+      NestedStatementError(
+        "IfErr",
+        cond,
+        this,
+        Transition(
+          cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+        )
+      )
 
     if (invar is Error)
-        NestedStatementError(
-            "IfErr",
-            invar,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)))
+      NestedStatementError(
+        "IfErr",
+        invar,
+        this,
+        Transition(
+          cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+        )
+      )
 
-    if (!invar.result)
-        return WhInvar(
-            cond as BooleanExpressionOk,
-            invar as BooleanExpressionOk,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)))
-
-    return if (cond.result)
+    return when (cond.result to invar.result) {
+      (True to True) ->
         WhTrue(
-            cond as BooleanExpressionOk,
-            invar as BooleanExpressionOk,
-            this,
-            Transition(
-                cfg,
-                dst =
-                    Configuration(
-                        concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory)))
-    else
+          cond as BooleanExpressionOk,
+          invar as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg,
+            dst =
+            Configuration(
+              concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory
+            )
+          )
+        )
+
+      (False to True) ->
         WhFalse(
-            cond as BooleanExpressionOk,
-            invar as BooleanExpressionOk,
-            this,
-            Transition(
-                cfg,
-                dst =
-                    Configuration(
-                        SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory)))
+          cond as BooleanExpressionOk,
+          invar as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg,
+            dst =
+            Configuration(
+              SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+            )
+          )
+        )
+
+      (True to False) ->
+        WhInvar(
+          cond as BooleanExpressionOk,
+          invar as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+          )
+        )
+
+      (False to False) ->
+        WhInvar(
+          cond as BooleanExpressionOk,
+          invar as BooleanExpressionOk,
+          this,
+          Transition(
+            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+          )
+        )
+
+      else -> throw Exception("Symbolic If-Condition not handled yet")
+    }
   }
 
   override fun toIndentedString(indent: String) =
@@ -322,7 +355,7 @@ data class Havoc(
                     Configuration(
                         SequenceOfStatements(cfg.statements.tail()),
                         cfg.scope,
-                        cfg.memory.write(a.result, number))))
+                        cfg.memory.write(a.result, NumericLiteral(number)))))
   }
 
   override fun toIndentedString(indent: String) =

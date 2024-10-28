@@ -65,12 +65,12 @@ class ArrayAccessError(
 
 // --------------------------------------------------------------------
 
-sealed class ArithmeticExpressionApp(result: BigInteger) : Application<BigInteger>(result)
+sealed class ArithmeticExpressionApp(result: ArithmeticExpression) : Application<ArithmeticExpression>(result)
 
-sealed class ArithmeticExpressionOk(result: BigInteger) : ArithmeticExpressionApp(result)
+sealed class ArithmeticExpressionOk(result: ArithmeticExpression) : ArithmeticExpressionApp(result)
 
 sealed class ArithmeticExpressionError(private val error: String) :
-    ArithmeticExpressionApp(BigInteger.ZERO), Error {
+    ArithmeticExpressionApp(NumericLiteral(BigInteger.ZERO)), Error {
   override fun getError() = error
 }
 
@@ -84,28 +84,28 @@ class AddOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val add: Add,
-    sum: BigInteger
+    sum: ArithmeticExpression
 ) : ArithmeticExpressionOk(sum)
 
 class SubOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val sub: Sub,
-    diff: BigInteger
+    diff: ArithmeticExpression
 ) : ArithmeticExpressionOk(diff)
 
 class MulOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val mul: Mul,
-    product: BigInteger
+    product: ArithmeticExpression
 ) : ArithmeticExpressionOk(product)
 
 class DivOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val div: Div,
-    quotient: BigInteger
+    quotient: ArithmeticExpression
 ) : ArithmeticExpressionOk(quotient)
 
 class DivZeroErr(val rightOk: ArithmeticExpressionOk, val div: Div) :
@@ -115,7 +115,7 @@ class RemOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val rem: Rem,
-    remainder: BigInteger
+    remainder: ArithmeticExpression
 ) : ArithmeticExpressionOk(remainder)
 
 class RemZeroErr(val rightOk: ArithmeticExpressionOk, val rem: Rem) :
@@ -124,25 +124,25 @@ class RemZeroErr(val rightOk: ArithmeticExpressionOk, val rem: Rem) :
 class UnaryMinusOk(
     val negated: ArithmeticExpressionOk,
     val unaryMinus: UnaryMinus,
-    result: BigInteger
+    result: ArithmeticExpression
 ) : ArithmeticExpressionOk(result)
 
-class ValAtAddrOk(val addrOk: AddressOk, val valAtAddr: ValAtAddr, value: BigInteger) :
+class ValAtAddrOk(val addrOk: AddressOk, val valAtAddr: ValAtAddr, value: ArithmeticExpression) :
     ArithmeticExpressionOk(value)
 
 class VarAddrOk(val addrOk: AddressOk, val varAddress: VarAddress, value: BigInteger) :
-    ArithmeticExpressionOk(value)
+    ArithmeticExpressionOk(NumericLiteral(value))
 
-class NumericLiteralOk(val n: NumericLiteral) : ArithmeticExpressionOk(n.literal)
+class NumericLiteralOk(val n: NumericLiteral) : ArithmeticExpressionOk(n)
 
 // --------------------------------------------------------------------
 
-sealed class BooleanExpressionApp(result: Boolean) : Application<Boolean>(result)
+sealed class BooleanExpressionApp(result: BooleanExpression) : Application<BooleanExpression>(result)
 
-sealed class BooleanExpressionOk(result: Boolean) : BooleanExpressionApp(result)
+sealed class BooleanExpressionOk(result: BooleanExpression) : BooleanExpressionApp(result)
 
 sealed class BooleanExpressionError(private val error: String) :
-    BooleanExpressionApp(false), Error {
+    BooleanExpressionApp(False), Error {
   override fun getError() = error
 }
 
@@ -153,71 +153,71 @@ class EqOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val eq: Eq,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class GtOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val gt: Gt,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class GteOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val gte: Gte,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class LtOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val lt: Lt,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class LteOk(
     val leftOk: ArithmeticExpressionOk,
     val rightOk: ArithmeticExpressionOk,
     val lte: Lte,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class AndOk(
     val leftOk: BooleanExpressionOk,
     val rightOk: BooleanExpressionOk,
     val and: And,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class OrOk(
     val leftOk: BooleanExpressionOk,
     val rightOk: BooleanExpressionOk,
     val or: Or,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class ImplyOk(
     val leftOk: BooleanExpressionOk,
     val rightOk: BooleanExpressionOk,
     val imply: Imply,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
 class EquivOk(
     val leftOk: BooleanExpressionOk,
     val rightOk: BooleanExpressionOk,
     val equiv: Equiv,
-    result: Boolean
+    result: BooleanExpression
 ) : BooleanExpressionOk(result)
 
-class NotOk(val negated: BooleanExpressionOk, val not: Not, result: Boolean) :
+class NotOk(val negated: BooleanExpressionOk, val not: Not, result: BooleanExpression) :
     BooleanExpressionOk(result)
 
-class TrueOk(val tru: True) : BooleanExpressionOk(true)
+class TrueOk(val tru: True) : BooleanExpressionOk(True)
 
-class FalseOk(val fls: False) : BooleanExpressionOk(false)
+class FalseOk(val fls: False) : BooleanExpressionOk(False)
 
 // --------------------------------------------------------------------
 
