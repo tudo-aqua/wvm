@@ -59,7 +59,7 @@ data class Context(
     return trace
   }
 
-  private fun initMemForScope(): Memory {
+  private fun initMemForScope(): Memory<BigInteger> {
     var mem = Memory(Array(scope.size) { BigInteger.ZERO })
     scope.symbols.values
         .filter { it.size > 1 }

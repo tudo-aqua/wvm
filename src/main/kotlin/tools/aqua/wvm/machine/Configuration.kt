@@ -19,11 +19,12 @@
 package tools.aqua.wvm.machine
 
 import tools.aqua.wvm.language.*
+import java.math.BigInteger
 
 data class Configuration(
     val statements: SequenceOfStatements,
     val scope: Scope,
-    val memory: Memory,
+    val memory: Memory<BigInteger>,
     val error: Boolean = false
 ) {
 

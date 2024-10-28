@@ -18,16 +18,14 @@
 
 package tools.aqua.wvm.machine
 
-import java.math.BigInteger
+class Memory<Vals>(private val store: Array<Vals>) {
 
-class Memory(private val store: Array<BigInteger>) {
-
-  fun read(addr: Int): BigInteger {
+  fun read(addr: Int): Vals {
     checkBounds(addr)
     return store[addr]
   }
 
-  fun write(addr: Int, value: BigInteger): Memory {
+  fun write(addr: Int, value: Vals): Memory<Vals> {
     checkBounds(addr)
     val copy = store.copyOf()
     copy[addr] = value

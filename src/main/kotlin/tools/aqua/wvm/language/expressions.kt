@@ -24,7 +24,7 @@ import tools.aqua.wvm.machine.Memory
 import tools.aqua.wvm.machine.Scope
 
 sealed interface Expression<T> {
-  fun evaluate(scope: Scope, memory: Memory): Application<T>
+  fun evaluate(scope: Scope, memory: Memory<BigInteger>): Application<T>
 }
 
 sealed interface ArithmeticExpression : Expression<BigInteger>
@@ -36,14 +36,14 @@ sealed interface BooleanExpression : Expression<Boolean>
 // Address Expressions
 
 data class Variable(val name: String) : AddressExpression {
-  override fun evaluate(scope: Scope, memory: Memory): AddressApp =
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): AddressApp =
       if (scope.defines(name)) VarOk(this, scope.resolve(name)) else VarErr(this)
 
   override fun toString(): String = "$name"
 }
 
 data class DeRef(val reference: AddressExpression) : AddressExpression {
-  override fun evaluate(scope: Scope, memory: Memory): AddressApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): AddressApp {
     val refApp = reference.evaluate(scope, memory)
     if (refApp is Error) return NestedAddressError("DeRefNestedError", refApp, this)
     // the semantics guarantee that refApp.result is a valid address
@@ -57,7 +57,7 @@ data class DeRef(val reference: AddressExpression) : AddressExpression {
 }
 
 data class ArrayAccess(val array: ValAtAddr, val index: ArithmeticExpression) : AddressExpression {
-  override fun evaluate(scope: Scope, memory: Memory): AddressApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): AddressApp {
     val base = array.evaluate(scope, memory)
     val offset = index.evaluate(scope, memory)
     if (base is ArithmeticExpressionError)
@@ -79,7 +79,7 @@ data class ArrayAccess(val array: ValAtAddr, val index: ArithmeticExpression) : 
 
 data class Add(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("AddLeftErr", left, this)
@@ -96,7 +96,7 @@ data class Add(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 
 data class Sub(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("SubLeftErr", left, this)
@@ -113,7 +113,7 @@ data class Sub(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 
 data class Mul(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("MulLeftErr", left, this)
@@ -130,7 +130,7 @@ data class Mul(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 
 data class Div(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("DivLeftErr", left, this)
@@ -148,7 +148,7 @@ data class Div(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 
 data class Rem(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("RemLeftErr", left, this)
@@ -165,7 +165,7 @@ data class Rem(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 }
 
 data class UnaryMinus(val negated: ArithmeticExpression) : ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val inner = negated.evaluate(scope, memory)
     if (inner is ArithmeticExpressionError)
         return NestedArithmeticError("UnaryMinusErr", inner, this)
@@ -176,14 +176,14 @@ data class UnaryMinus(val negated: ArithmeticExpression) : ArithmeticExpression 
 }
 
 data class NumericLiteral(val literal: BigInteger) : ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp =
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp =
       NumericLiteralOk(this)
 
   override fun toString(): String = "$literal"
 }
 
 data class ValAtAddr(val addr: AddressExpression) : ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val addrApp = addr.evaluate(scope, memory)
     if (addrApp is AddressError) return NestedArithmeticError("ValAtAddrErr", addrApp, this)
     return ValAtAddrOk(addrApp as AddressOk, this, memory.read(addrApp.result))
@@ -193,7 +193,7 @@ data class ValAtAddr(val addr: AddressExpression) : ArithmeticExpression {
 }
 
 data class VarAddress(val variable: Variable) : ArithmeticExpression {
-  override fun evaluate(scope: Scope, memory: Memory): ArithmeticExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): ArithmeticExpressionApp {
     val varAddress = variable.evaluate(scope, memory)
     if (varAddress is AddressError) return NestedArithmeticError("VarAddrErr", varAddress, this)
     return VarAddrOk(varAddress as AddressOk, this, varAddress.result.toBigInteger())
@@ -206,7 +206,7 @@ data class VarAddress(val variable: Variable) : ArithmeticExpression {
 
 data class Eq(val left: ArithmeticExpression, val right: ArithmeticExpression, val nesting: Int) :
     BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("EqLeftErr", left, this)
@@ -224,7 +224,7 @@ data class Eq(val left: ArithmeticExpression, val right: ArithmeticExpression, v
 }
 
 data class Gt(val left: ArithmeticExpression, val right: ArithmeticExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("GtLeftErr", left, this)
@@ -241,7 +241,7 @@ data class Gt(val left: ArithmeticExpression, val right: ArithmeticExpression) :
 
 data class Gte(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("GteLeftErr", left, this)
@@ -257,7 +257,7 @@ data class Gte(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 }
 
 data class Lt(val left: ArithmeticExpression, val right: ArithmeticExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("LtLeftErr", left, this)
@@ -274,7 +274,7 @@ data class Lt(val left: ArithmeticExpression, val right: ArithmeticExpression) :
 
 data class Lte(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("LteLeftErr", left, this)
@@ -290,7 +290,7 @@ data class Lte(val left: ArithmeticExpression, val right: ArithmeticExpression) 
 }
 
 data class And(val left: BooleanExpression, val right: BooleanExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("AndLeftErr", left, this)
@@ -306,7 +306,7 @@ data class And(val left: BooleanExpression, val right: BooleanExpression) : Bool
 }
 
 data class Or(val left: BooleanExpression, val right: BooleanExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("OrLeftErr", left, this)
@@ -322,7 +322,7 @@ data class Or(val left: BooleanExpression, val right: BooleanExpression) : Boole
 }
 
 data class Imply(val left: BooleanExpression, val right: BooleanExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("ImplyLeftErr", left, this)
@@ -338,7 +338,7 @@ data class Imply(val left: BooleanExpression, val right: BooleanExpression) : Bo
 }
 
 data class Equiv(val left: BooleanExpression, val right: BooleanExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val left = left.evaluate(scope, memory)
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("EquivLeftErr", left, this)
@@ -354,7 +354,7 @@ data class Equiv(val left: BooleanExpression, val right: BooleanExpression) : Bo
 }
 
 data class Not(val negated: BooleanExpression) : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp {
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp {
     val inner = negated.evaluate(scope, memory)
     if (inner is BooleanExpressionError) return NestedBooleanError("NotErr", inner, this)
     return NotOk(inner as BooleanExpressionOk, this, !inner.result)
@@ -364,13 +364,13 @@ data class Not(val negated: BooleanExpression) : BooleanExpression {
 }
 
 object True : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp = TrueOk(this)
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp = TrueOk(this)
 
   override fun toString(): String = "true"
 }
 
 object False : BooleanExpression {
-  override fun evaluate(scope: Scope, memory: Memory): BooleanExpressionApp = FalseOk(this)
+  override fun evaluate(scope: Scope, memory: Memory<BigInteger>): BooleanExpressionApp = FalseOk(this)
 
   override fun toString(): String = "false"
 }
@@ -379,7 +379,7 @@ object False : BooleanExpression {
 // Verification Expressions
 
 data class Forall(val boundVar: Variable, val expression: BooleanExpression) : BooleanExpression {
-    override fun evaluate(scope: Scope, memory: Memory): Application<Boolean> {
+    override fun evaluate(scope: Scope, memory: Memory<BigInteger>): Application<Boolean> {
         throw Exception("forall is not meant to be evaluated.")
     }
 
@@ -389,7 +389,7 @@ data class Forall(val boundVar: Variable, val expression: BooleanExpression) : B
 sealed interface ArrayExpression : AddressExpression
 
 object AnyArray : ArrayExpression {
-    override fun evaluate(scope: Scope, memory: Memory): Application<Int> {
+    override fun evaluate(scope: Scope, memory: Memory<BigInteger>): Application<Int> {
         throw Exception("array is not meant to be evaluated.")
     }
 
@@ -397,7 +397,7 @@ object AnyArray : ArrayExpression {
 }
 
 data class ArrayRead(val array:ArrayExpression, val index:ArithmeticExpression) : ArrayExpression {
-    override fun evaluate(scope: Scope, memory: Memory): Application<Int> {
+    override fun evaluate(scope: Scope, memory: Memory<BigInteger>): Application<Int> {
         throw Exception("array read is not meant to be evaluated.")
     }
 
@@ -405,7 +405,7 @@ data class ArrayRead(val array:ArrayExpression, val index:ArithmeticExpression) 
 }
 
 data class ArrayWrite(val array:ArrayExpression, val index:ArithmeticExpression, val value:ArithmeticExpression) : ArrayExpression {
-    override fun evaluate(scope: Scope, memory: Memory): Application<Int> {
+    override fun evaluate(scope: Scope, memory: Memory<BigInteger>): Application<Int> {
         throw Exception("array write is not meant to be evaluated.")
     }
 
