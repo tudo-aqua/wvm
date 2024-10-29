@@ -28,32 +28,46 @@ data class Context(
     val program: List<Statement>,
     val pre: BooleanExpression = True,
     val post: BooleanExpression = True,
-    var input: Scanner? = null
+    var input: Scanner? = null,
+    val symbolic: Boolean = false
 ) {
-  fun execute(verbose: Boolean, output: Output = Output(), maxSteps: Int = -1): List<StatementApp> {
-    var cfg = Configuration(SequenceOfStatements(program), scope, initMemForScope())
-    var trace = listOf<StatementApp>()
-    var stepCount = 0
-    if (verbose) println(cfg)
-    while (!cfg.isFinal()) {
-      stepCount++
-      if (maxSteps in 1 ..< stepCount) {
+  fun execute(verbose: Boolean, output: Output = Output(), maxSteps: Int = -1): ExecutionTree {
+    val initialCfg = Configuration(SequenceOfStatements(program), scope, initMemForScope())
+    val root = ExecutionTree(mutableMapOf(), initialCfg)
+    var wl = mutableListOf(root)
+
+    if (verbose) println(initialCfg)
+    while (wl.isNotEmpty()) {
+      val current = wl.first()
+      wl = wl.drop(1).toMutableList()
+      if (current.cfg.isFinal())
+        break
+      val cfg = current.cfg
+      val stepCount = current.stepCount
+      if (maxSteps in 1 ..< stepCount+1) {
         output.println("Terminated after ${maxSteps} steps.")
         break
       }
-      val step = cfg.statements.head().execute(cfg, input)
-      if (step.result.output != null) {
-        output.println(step.result.output)
+      if (cfg.error) {
+        output.println("Terminated abnormally.")
+        break
       }
-      trace = trace + step
-      cfg = step.result.dst
-      if (verbose) println(cfg)
+      val steps = listOf(cfg.statements.head().execute(cfg, input))
+      for(step in steps) {
+        if (step.result.output != null) {
+          output.println(step.result.output)
+        }
+        val nextCfg = step.result.dst
+        val nextExecTree = ExecutionTree(next = mutableMapOf(), nextCfg, stepCount+1)
+        current.next.put(step, nextExecTree)
+        wl.addLast(nextExecTree)
+        if (verbose) println(nextCfg)
+      }
+
     }
-    if (cfg.error) {
-      output.println("Terminated abnormally.")
-    }
+
     if (verbose) println("end.")
-    return trace
+    return root
   }
 
   private fun initMemForScope(): Memory<ArithmeticExpression> {

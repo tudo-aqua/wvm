@@ -25,7 +25,8 @@ data class Configuration(
     val statements: SequenceOfStatements,
     val scope: Scope,
     val memory: Memory<ArithmeticExpression>,
-    val error: Boolean = false
+    val error: Boolean = false,
+    val pathConstraint: BooleanExpression = True
 ) {
 
   fun isFinal() = statements.isExhausted()
