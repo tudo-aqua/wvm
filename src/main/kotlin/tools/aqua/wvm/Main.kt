@@ -65,8 +65,8 @@ class While : CliktCommand() {
         println("=============================================")
         println(context.scope)
         println(SequenceOfStatements(context.program).toIndentedString(""))
-        println(context.pre)
-        println(context.post)
+        println("Pre-Condition: " + context.pre)
+        println("Post-Condition: " + context.post)
         println("=============================================")
       }
 
@@ -89,6 +89,10 @@ class While : CliktCommand() {
 
       if (run) {
         val trace = context.execute(verbose)
+        if (verbose) {
+          println("Execution Tree:")
+          print(trace.toIndentString(""))
+        }
       }
     } catch (e: Exception) {
       println("ERROR: ${e.message}")

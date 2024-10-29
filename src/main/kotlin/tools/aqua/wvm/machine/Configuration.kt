@@ -31,5 +31,5 @@ data class Configuration(
 
   fun isFinal() = statements.isExhausted()
 
-  override fun toString(): String = memory.toString()
+  override fun toString(): String = "${memory.toString()} under $pathConstraint"
 }

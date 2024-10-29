@@ -20,7 +20,6 @@ package tools.aqua.wvm.machine
 
 import java.math.BigInteger
 import java.util.Scanner
-import tools.aqua.wvm.analysis.semantics.StatementApp
 import tools.aqua.wvm.language.*
 
 data class Context(
@@ -36,7 +35,6 @@ data class Context(
     val root = ExecutionTree(mutableMapOf(), initialCfg)
     var wl = mutableListOf(root)
 
-    if (verbose) println(initialCfg)
     while (wl.isNotEmpty()) {
       val current = wl.first()
       wl = wl.drop(1).toMutableList()
@@ -54,14 +52,13 @@ data class Context(
       }
       val steps = listOf(cfg.statements.head().execute(cfg, input))
       for(step in steps) {
-        if (step.result.output != null) {
+        if (step.result.output != null && !symbolic && !verbose) {
           output.println(step.result.output)
         }
         val nextCfg = step.result.dst
-        val nextExecTree = ExecutionTree(next = mutableMapOf(), nextCfg, stepCount+1)
+        val nextExecTree = ExecutionTree(next = mutableMapOf(), nextCfg, stepCount+1, step.result.output)
         current.next.put(step, nextExecTree)
         wl.addLast(nextExecTree)
-        if (verbose) println(nextCfg)
       }
 
     }
