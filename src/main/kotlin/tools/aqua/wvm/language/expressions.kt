@@ -99,10 +99,6 @@ data class Add(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     } else {
       Add(left.result, right.result)
     }
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
     return AddOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
@@ -120,15 +116,17 @@ data class Sub(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("SubLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedArithmeticError("SubRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      NumericLiteral(left.result.literal.minus(right.result.literal))
+    } else {
+      Sub(left.result, right.result)
+    }
     return SubOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        NumericLiteral(left.result.literal.minus(right.result.literal)))
+        resultExp)
   }
 
   override fun toString(): String = "($left - $right)"
@@ -141,15 +139,17 @@ data class Mul(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("MulLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedArithmeticError("MulRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      NumericLiteral(left.result.literal * right.result.literal)
+    } else {
+      Mul(left.result, right.result)
+    }
     return MulOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        NumericLiteral(left.result.literal * right.result.literal))
+        resultExp)
   }
 
   override fun toString(): String = "($left * $right)"
@@ -163,15 +163,17 @@ data class Div(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     if (left is ArithmeticExpressionError) return NestedArithmeticError("DivLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedArithmeticError("DivRightErr", right, this)
     if (right.result == BigInteger.ZERO) return DivZeroErr(right as ArithmeticExpressionOk, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      NumericLiteral(left.result.literal.div(right.result.literal))
+    } else {
+      Div(left.result, right.result)
+    }
     return DivOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        NumericLiteral(left.result.literal.div(right.result.literal)))
+        resultExp)
   }
 
   override fun toString(): String = "($left / $right)"
@@ -185,15 +187,17 @@ data class Rem(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     if (left is ArithmeticExpressionError) return NestedArithmeticError("RemLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedArithmeticError("RemRightErr", right, this)
     if (right.result == BigInteger.ZERO) return RemZeroErr(right as ArithmeticExpressionOk, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      NumericLiteral(left.result.literal.rem(right.result.literal))
+    } else {
+      Rem(left.result, right.result)
+    }
     return RemOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        NumericLiteral(left.result.literal.rem(right.result.literal)))
+        resultExp)
   }
 
   override fun toString(): String = "($left % $right)"
@@ -204,9 +208,12 @@ data class UnaryMinus(val negated: ArithmeticExpression) : ArithmeticExpression 
     val inner = negated.evaluate(scope, memory)
     if (inner is ArithmeticExpressionError)
         return NestedArithmeticError("UnaryMinusErr", inner, this)
-    if (inner.result !is NumericLiteral)
-      throw Exception("inner should procude concrete value.")
-    return UnaryMinusOk(inner as ArithmeticExpressionOk, this, NumericLiteral(inner.result.literal.unaryMinus()))
+    val resultExp = if (inner.result is NumericLiteral) {
+      NumericLiteral(inner.result.literal.unaryMinus())
+    } else {
+      UnaryMinus(inner.result)
+    }
+    return UnaryMinusOk(inner as ArithmeticExpressionOk, this, resultExp)
   }
 
   override fun toString(): String = "-($negated)"
@@ -248,15 +255,17 @@ data class Eq(val left: ArithmeticExpression, val right: ArithmeticExpression, v
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("EqLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedBooleanError("EqRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+                        right.result is NumericLiteral) {
+      if (left.result.literal == right.result.literal) True else False
+    } else {
+      Eq(left.result, right.result, nesting)
+    }
     return EqOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        if (left.result.literal == right.result.literal) True else False)
+        resultExp)
   }
 
   private fun opString(i: Int): String = if (i >= 0) "=${opString(i-1)}" else ""
@@ -270,15 +279,17 @@ data class Gt(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("GtLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedBooleanError("GtRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      if (left.result.literal > right.result.literal) True else False
+    } else {
+      Gt(left.result, right.result)
+    }
     return GtOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        if (left.result.literal > right.result.literal) True else False)
+        resultExp)
   }
 
   override fun toString(): String = "($left > $right)"
@@ -291,15 +302,17 @@ data class Gte(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("GteLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedBooleanError("GteRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      if (left.result.literal >= right.result.literal) True else False
+    } else {
+      Gte(left.result, right.result)
+    }
     return GteOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        if (left.result.literal >= right.result.literal) True else False)
+        resultExp)
   }
 
   override fun toString(): String = "($left >= $right)"
@@ -311,15 +324,17 @@ data class Lt(val left: ArithmeticExpression, val right: ArithmeticExpression) :
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("LtLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedBooleanError("LtRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      if (left.result.literal < right.result.literal) True else False
+    } else {
+      Lt(left.result, right.result)
+    }
     return LtOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        if (left.result.literal < right.result.literal) True else False)
+        resultExp)
   }
 
   override fun toString(): String = "($left < $right)"
@@ -332,15 +347,17 @@ data class Lte(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedBooleanError("LteLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedBooleanError("LteRightErr", right, this)
-    if (left.result !is NumericLiteral)
-      throw Exception("left should produce a concrete value")
-    if (right.result !is NumericLiteral)
-      throw Exception("right should produce concrete value.")
+    val resultExp = if (left.result is NumericLiteral &&
+      right.result is NumericLiteral) {
+      if (left.result.literal <= right.result.literal) True else False
+    } else {
+      Lte(left.result, right.result)
+    }
     return LteOk(
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        if (left.result.literal <= right.result.literal) True else False)
+        resultExp)
   }
 
   override fun toString(): String = "($left <= $right)"
@@ -352,21 +369,22 @@ data class And(val left: BooleanExpression, val right: BooleanExpression) : Bool
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("AndLeftErr", left, this)
     if (right is BooleanExpressionError) return NestedBooleanError("AndRightErr", right, this)
-    val a = when(left.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("left should produce a concrete value")
-    }
-    val b = when(right.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("right should produce a concrete value")
+    val resultExp = if (left.result is True && right.result is True) {
+      True
+    } else if (left.result is True && right.result is False) {
+      False
+    } else if (left.result is False && right.result is True) {
+      False
+    } else if (left.result is False && right.result is False) {
+      False
+    } else {
+      And(left.result, right.result)
     }
     return AndOk(
         left as BooleanExpressionOk,
         right as BooleanExpressionOk,
         this,
-      toExpression(a && b))
+        resultExp)
   }
 
   override fun toString(): String = "($left and $right)"
@@ -378,21 +396,22 @@ data class Or(val left: BooleanExpression, val right: BooleanExpression) : Boole
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("OrLeftErr", left, this)
     if (right is BooleanExpressionError) return NestedBooleanError("OrRightErr", right, this)
-    val a = when(left.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("left should produce a concrete value")
-    }
-    val b = when(right.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("right should produce a concrete value")
+    val resultExp = if (left.result is True && right.result is True) {
+      True
+    } else if (left.result is True && right.result is False) {
+      True
+    } else if (left.result is False && right.result is True) {
+      True
+    } else if (left.result is False && right.result is False) {
+      False
+    } else {
+      Or(left.result, right.result)
     }
     return OrOk(
         left as BooleanExpressionOk,
         right as BooleanExpressionOk,
         this,
-        toExpression(a || b))
+        resultExp)
   }
 
   override fun toString(): String = "($left or $right)"
@@ -404,21 +423,22 @@ data class Imply(val left: BooleanExpression, val right: BooleanExpression) : Bo
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("ImplyLeftErr", left, this)
     if (right is BooleanExpressionError) return NestedBooleanError("ImplyRightErr", right, this)
-    val a = when(left.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("left should produce a concrete value")
-    }
-    val b = when(right.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("right should produce a concrete value")
+    val resultExp = if (left.result is True && right.result is True) {
+      True
+    } else if (left.result is True && right.result is False) {
+      False
+    } else if (left.result is False && right.result is True) {
+      True
+    } else if (left.result is False && right.result is False) {
+      True
+    } else {
+      Imply(left.result, right.result)
     }
     return ImplyOk(
         left as BooleanExpressionOk,
         right as BooleanExpressionOk,
         this,
-        toExpression(!a || b))
+        resultExp)
   }
 
   override fun toString(): String = "($left => $right)"
@@ -430,21 +450,22 @@ data class Equiv(val left: BooleanExpression, val right: BooleanExpression) : Bo
     val right = right.evaluate(scope, memory)
     if (left is BooleanExpressionError) return NestedBooleanError("EquivLeftErr", left, this)
     if (right is BooleanExpressionError) return NestedBooleanError("EquivRightErr", right, this)
-    val a = when(left.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("left should produce a concrete value")
-    }
-    val b = when(right.result) {
-      True -> true
-      False -> false
-      else -> throw Exception("right should produce a concrete value")
+    val resultExp = if (left.result is True && right.result is True) {
+      True
+    } else if (left.result is True && right.result is False) {
+      False
+    } else if (left.result is False && right.result is True) {
+      False
+    } else if (left.result is False && right.result is False) {
+      True
+    } else {
+      Equiv(left.result, right.result)
     }
     return EquivOk(
         left as BooleanExpressionOk,
         right as BooleanExpressionOk,
         this,
-        toExpression( a == b))
+        resultExp)
   }
 
   override fun toString(): String = "($left <=> $right)"
@@ -454,12 +475,14 @@ data class Not(val negated: BooleanExpression) : BooleanExpression {
   override fun evaluate(scope: Scope, memory: Memory<ArithmeticExpression>): BooleanExpressionApp {
     val inner = negated.evaluate(scope, memory)
     if (inner is BooleanExpressionError) return NestedBooleanError("NotErr", inner, this)
-    val a = when(inner.result){
-      True -> true
-      False -> false
-      else -> throw Exception("inner should produce a concrete value.")
+    val resultExp = if (inner.result is True) {
+      False
+    } else if (inner.result is False) {
+      True
+    } else {
+      Not(inner.result)
     }
-    return NotOk(inner as BooleanExpressionOk, this, toExpression(!a))
+    return NotOk(inner as BooleanExpressionOk, this, resultExp)
   }
 
   override fun toString(): String = "(not $negated)"
