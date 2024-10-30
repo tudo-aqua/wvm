@@ -31,6 +31,8 @@ import tools.aqua.wvm.language.SequenceOfStatements
 import tools.aqua.wvm.machine.Output
 import tools.aqua.wvm.parser.Parser
 
+var externCounter : Int = 0
+
 class While : CliktCommand() {
 
   private val verbose: Boolean by

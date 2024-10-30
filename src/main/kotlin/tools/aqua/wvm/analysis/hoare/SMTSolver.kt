@@ -23,6 +23,7 @@ import tools.aqua.konstraints.parser.SortedVar
 import tools.aqua.konstraints.smt.*
 import tools.aqua.konstraints.smt.Expression
 import tools.aqua.konstraints.theories.*
+import tools.aqua.konstraints.util.reduceOrDefault
 import tools.aqua.wvm.language.*
 import tools.aqua.wvm.language.And
 import tools.aqua.wvm.language.False
@@ -40,6 +41,8 @@ class SMTSolver {
   var vars = mapOf<String, DeclareConst>()
 
   val ctx = Context(AUFLIA)
+
+  val seenModels = mutableListOf<Map<String, String>>()
 
   init {
     vars += (memArray to DeclareConst(Symbol(memArray), ArraySort(IntSort, IntSort)))
@@ -100,7 +103,12 @@ class SMTSolver {
       }
 
   fun solve(expr: BooleanExpression): Result {
-    val konstraint = asKonstraint(expr)
+    val oldModels = seenModels.map {
+      it.entries.map {
+        Eq(ValAtAddr(Variable(it.key)), NumericLiteral(it.value.toBigInteger()), 0)
+      }.reduce<BooleanExpression, Eq>{ acc, eq -> And(acc, eq) }
+    }.reduceOrDefault(False) {exp1, exp2 -> Or(exp1, exp2)}
+    val konstraint = asKonstraint(And(expr, Not(oldModels)))
     var commands = vars.values + Assert(konstraint) + CheckSat
     val smtProgram = DefaultSMTProgram(commands, ctx)
     var model = emptyMap<String, String>()
@@ -114,6 +122,7 @@ class SMTSolver {
           progForModel.model?.definitions?.associate { it ->
             (it.name.toString() to it.term.toString())
           } ?: emptyMap()
+        seenModels.addLast(model)
       } catch (ex: Exception) {
         // todo: produce some output
         println("oops.")

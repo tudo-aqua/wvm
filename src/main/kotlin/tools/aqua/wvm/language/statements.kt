@@ -22,6 +22,7 @@ import java.math.BigInteger
 import java.util.Scanner
 import kotlin.random.Random
 import tools.aqua.wvm.analysis.semantics.*
+import tools.aqua.wvm.externCounter
 import tools.aqua.wvm.machine.Configuration
 
 interface PrintWithIndentation {
@@ -77,39 +78,57 @@ data class Swap(val left: AddressExpression, val right: AddressExpression) : Sta
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val a1 = left.evaluate(cfg.scope, cfg.memory)
-    val a2 = right.evaluate(cfg.scope, cfg.memory)
+    val apps = mutableListOf<StatementApp>()
+    for (a1 in left.evaluate(cfg.scope, cfg.memory)) {
+      for (a2 in right.evaluate(cfg.scope, cfg.memory)) {
+        if (a1 is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "SwapErr",
+              a1,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+              )
+            )
+          )
+          continue
+        }
+        if (a2 is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "SwapErr",
+              a2,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+              )
+            )
+          )
+          continue
+        }
+        val e1 = cfg.memory.read(a1.result)
+        val e2 = cfg.memory.read(a2.result)
 
-    if (a1 is Error)
-        return listOf(NestedStatementError(
-            "SwapErr",
-            a1,
+        apps.addLast(
+          SwapOk(
+            a1 as AddressOk,
+            a2 as AddressOk,
             this,
             Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    if (a2 is Error)
-        return listOf(NestedStatementError(
-            "SwapErr",
-            a2,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    val e1 = cfg.memory.read(a1.result)
-    val e2 = cfg.memory.read(a2.result)
-
-    return listOf(SwapOk(
-        a1 as AddressOk,
-        a2 as AddressOk,
-        this,
-        Transition(
-            cfg,
-            dst =
-                Configuration(
-                    SequenceOfStatements(cfg.statements.tail()),
-                    cfg.scope,
-                    cfg.memory.write(a1.result, e2).write(a2.result, e1)))))
+              cfg,
+              dst =
+              Configuration(
+                SequenceOfStatements(cfg.statements.tail()),
+                cfg.scope,
+                cfg.memory.write(a1.result, e2).write(a2.result, e1)
+              )
+            )
+          )
+        )
+      }
+    }
+    return apps
   }
 
   override fun toIndentedString(indent: String) = "${indent}swap $left and $right;\n"
@@ -120,31 +139,50 @@ data class Assertion(val cond: BooleanExpression) : Statement {
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val b = cond.evaluate(cfg.scope, cfg.memory)
-    if (b is Error)
-        return listOf(NestedStatementError(
+    val apps = mutableListOf<StatementApp>()
+    for (b in cond.evaluate(cfg.scope, cfg.memory)) {
+      if (b is Error) {
+        apps.addLast(
+          NestedStatementError(
             "AssertErr",
             b,
             this,
             Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-    return when(b.result) {
-      True ->
-        listOf(AssertOK(
-          b as BooleanExpressionOk,
-          Transition(
-            cfg,
-            dst =
-            Configuration(
-              SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory))))
-      False ->
-        listOf(AssertErr(
-          b as BooleanExpressionOk,
-          Transition(
-            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true))))
-      else -> throw Exception("Symbolic Assertions not handled yet")
-    }
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+            )
+          )
+        )
+        continue
+      }
+      when (b.result) {
+        True ->
+          apps.addLast(
+            AssertOK(
+              b as BooleanExpressionOk,
+              Transition(
+                cfg,
+                dst =
+                Configuration(
+                  SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+                )
+              )
+            )
+          )
 
+        False ->
+          apps.addLast(
+            AssertErr(
+              b as BooleanExpressionOk,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true)
+              )
+            )
+          )
+
+        else -> throw Exception("Symbolic Assertions not handled yet")
+      }
+    }
+    return apps
   }
 
   override fun toIndentedString(indent: String) = "${indent}assert $cond;"
@@ -159,40 +197,60 @@ data class IfThenElse(
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val b = cond.evaluate(cfg.scope, cfg.memory)
-    if (b is Error)
-        return listOf(NestedStatementError(
+    val apps = mutableListOf<StatementApp>()
+    for (b in cond.evaluate(cfg.scope, cfg.memory)) {
+      if (b is Error) {
+        apps.addLast(
+          NestedStatementError(
             "IfErr",
             b,
             this,
             Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+            )
+          )
+        )
+        continue
+      }
+      when (b.result) {
+        True ->
+          apps.addLast(
+            IfTrue(
+              b as BooleanExpressionOk,
+              this,
+              Transition(
+                cfg,
+                dst =
+                Configuration(
+                  concat(thenBlock.statements, cfg.statements.tail()),
+                  cfg.scope,
+                  cfg.memory
+                )
+              )
+            )
+          )
 
-    return when(b.result) {
-      True ->
-        listOf(IfTrue(
-          b as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg,
-            dst =
-            Configuration(
-              concat(thenBlock.statements, cfg.statements.tail()),
-              cfg.scope,
-              cfg.memory))))
-      False ->
-        listOf(IfFalse(
-          b as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg,
-            dst =
-            Configuration(
-              concat(elseBlock.statements, cfg.statements.tail()),
-              cfg.scope,
-              cfg.memory))))
-      else -> throw Exception("Symbolic If-Condition not handled yet")
+        False ->
+          apps.addLast(
+            IfFalse(
+              b as BooleanExpressionOk,
+              this,
+              Transition(
+                cfg,
+                dst =
+                Configuration(
+                  concat(elseBlock.statements, cfg.statements.tail()),
+                  cfg.scope,
+                  cfg.memory
+                )
+              )
+            )
+          )
+
+        else -> throw Exception("Symbolic If-Condition not handled yet")
+      }
     }
+    return apps
   }
 
   override fun toIndentedString(indent: String) =
@@ -212,80 +270,98 @@ data class While(
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val cond = head.evaluate(cfg.scope, cfg.memory)
-    val invar = invariant.evaluate(cfg.scope, cfg.memory)
+    val apps = mutableListOf<StatementApp>()
+    for (cond in head.evaluate(cfg.scope, cfg.memory)) {
+      for (invar in invariant.evaluate(cfg.scope, cfg.memory)) {
 
-    if (cond is Error)
-      return listOf(NestedStatementError(
-        "IfErr",
-        cond,
-        this,
-        Transition(
-          cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-        )
-      ))
-
-    if (invar is Error)
-      return listOf(NestedStatementError(
-        "IfErr",
-        invar,
-        this,
-        Transition(
-          cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-        )
-      ))
-
-    return when (cond.result to invar.result) {
-      (True to True) ->
-        listOf(WhTrue(
-          cond as BooleanExpressionOk,
-          invar as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg,
-            dst =
-            Configuration(
-              concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory
+        if (cond is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "IfErr",
+              cond,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+              )
             )
           )
-        ))
-
-      (False to True) ->
-        listOf(WhFalse(
-          cond as BooleanExpressionOk,
-          invar as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg,
-            dst =
-            Configuration(
-              SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+          continue
+        }
+        if (invar is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "IfErr",
+              invar,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+              )
             )
           )
-        ))
+          continue
+        }
+        when (cond.result to invar.result) {
+          (True to True) ->
+            apps.addLast(
+              WhTrue(
+                cond as BooleanExpressionOk,
+                invar as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg,
+                  dst =
+                  Configuration(
+                    concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory
+                  )
+                )
+              )
+            )
 
-      (True to False) ->
-        listOf(WhInvar(
-          cond as BooleanExpressionOk,
-          invar as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-          )
-        ))
+          (False to True) ->
+            apps.addLast(
+              WhFalse(
+                cond as BooleanExpressionOk,
+                invar as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg,
+                  dst =
+                  Configuration(
+                    SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+                  )
+                )
+              )
+            )
 
-      (False to False) ->
-        listOf(WhInvar(
-          cond as BooleanExpressionOk,
-          invar as BooleanExpressionOk,
-          this,
-          Transition(
-            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-          )
-        ))
+          (True to False) ->
+            apps.addLast(
+              WhInvar(
+                cond as BooleanExpressionOk,
+                invar as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+                )
+              )
+            )
 
-      else -> throw Exception("Symbolic If-Condition not handled yet")
+          (False to False) ->
+            apps.addLast(
+              WhInvar(
+                cond as BooleanExpressionOk,
+                invar as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+                )
+              )
+            )
+
+          else -> throw Exception("Symbolic If-Condition not handled yet")
+        }
+      }
     }
+    return apps
   }
 
   override fun toIndentedString(indent: String) =
@@ -294,32 +370,67 @@ data class While(
           "${indent}};\n"
 }
 
+fun <A> List<List<A>>.multiply() : List<List<A>> {
+  if (this.isEmpty())
+    return listOf()
+
+  val l = this.first()
+  val ll = this.drop(1)
+  if(ll.isEmpty())
+    return l.map { listOf(it) }
+  val acc = mutableListOf<List<A>>()
+  for (e in l) {
+    for (p in ll.multiply()) {
+      acc.addLast(listOf(e) + p)
+    }
+  }
+  return acc
+}
+
 data class Print(val message: String, val values: List<ArithmeticExpression>) : Statement {
 
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val eval = values.map { it.evaluate(cfg.scope, cfg.memory) as ArithmeticExpressionApp }
-    if (eval.any { it is Error })
-        return listOf(NestedStatementError(
-            "PrintErr",
-            eval.first { it is Error } as Error,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    var out = message
-    if (values.isNotEmpty()) {
-      out += values.map { it.evaluate(cfg.scope, cfg.memory).result }.joinToString(", ", " [", "]")
+    val valuesL = mutableListOf<MutableList<Application<ArithmeticExpression>>>()
+    for (v in values) {
+      valuesL.addLast(mutableListOf())
+      for (e in v.evaluate(cfg.scope, cfg.memory)) {
+        valuesL.last().addLast(e)
+      }
     }
-    return listOf(PrintOk(
-        eval.map { it as ArithmeticExpressionOk },
-        this,
-        Transition(
+    val valueCombinations = valuesL.multiply()
+    val apps = mutableListOf<StatementApp>()
+    for (comb in valueCombinations) {
+      if (comb.any { it is Error }) {
+        apps.addLast(NestedStatementError(
+          "PrintErr",
+          comb.first { it is Error } as Error,
+          this,
+          Transition(
+            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+          )))
+        continue
+      }
+
+      var out = message
+      if (comb.isNotEmpty()) {
+        out += comb.map { it.result }.joinToString(", ", " [", "]")
+      }
+      apps.addLast(
+        PrintOk(
+          comb.map { it as ArithmeticExpressionOk },
+          this,
+          Transition(
             cfg,
             output = out,
             dst =
-                Configuration(SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory))))
+            Configuration(SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory)
+          )
+        )
+      )
+    }
+    return apps
   }
 
   override fun toIndentedString(indent: String) =
@@ -341,37 +452,76 @@ data class Havoc(
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val a = addr.evaluate(cfg.scope, cfg.memory)
-    if (a is Error)
-        return listOf(NestedStatementError(
+    val apps = mutableListOf<StatementApp>()
+
+    for (a in addr.evaluate(cfg.scope, cfg.memory)) {
+      if (a is Error) {
+        apps.addLast(
+          NestedStatementError(
             "HavocErr",
             a,
             this,
             Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    val number =
-        input?.nextBigInteger() ?: Random.nextLong(lower.toLong(), upper.toLong()).toBigInteger()
-    return if (number < lower || number > upper)
-        listOf(HavocRangeErr(
-            a as AddressOk,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-    else
-        listOf(HavocOk(
-            a as AddressOk,
-            this,
-            Transition(
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+            )
+          )
+        )
+        continue
+      }
+      if(!symbolic) {
+        val number =
+          input?.nextBigInteger() ?: Random.nextLong(lower.toLong(), upper.toLong()).toBigInteger()
+        if (number < lower || number > upper)
+          apps.addLast(
+            HavocRangeErr(
+              a as AddressOk,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
+              )
+            )
+          )
+        else
+          apps.addLast(
+            HavocOk(
+              a as AddressOk,
+              this,
+              Transition(
                 cfg,
                 input = number,
                 dst =
-                    Configuration(
-                        SequenceOfStatements(cfg.statements.tail()),
-                        cfg.scope,
-                        cfg.memory.write(a.result, NumericLiteral(number))))))
+                Configuration(
+                  SequenceOfStatements(cfg.statements.tail()),
+                  cfg.scope,
+                  cfg.memory.write(a.result, NumericLiteral(number))
+                )
+              )
+            )
+          )
+      }
+      if (symbolic) {
+        val symbolName = "extern${externCounter}"
+        externCounter += 1
+        apps.addLast(
+          HavocOk(
+            a as AddressOk,
+            this,
+            Transition(
+              cfg,
+              input = null,
+              dst =
+              Configuration(
+                SequenceOfStatements(cfg.statements.tail()),
+                cfg.scope,
+                cfg.memory.write(a.result, ValAtAddr(Variable(symbolName)))
+              )
+            )
+          )
+        )
+      }
+    }
+    return apps
   }
-
   override fun toIndentedString(indent: String) =
       "${indent}extern $addr $lower .. ${upper.minus(BigInteger.ONE)};\n"
 }
