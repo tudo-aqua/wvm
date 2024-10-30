@@ -93,6 +93,12 @@ data class Add(val left: ArithmeticExpression, val right: ArithmeticExpression) 
     val right = right.evaluate(scope, memory)
     if (left is ArithmeticExpressionError) return NestedArithmeticError("AddLeftErr", left, this)
     if (right is ArithmeticExpressionError) return NestedArithmeticError("AddRightErr", right, this)
+    val resultExp = if (left.result is NumericLiteral &&
+                        right.result is NumericLiteral) {
+      NumericLiteral(left.result.literal.plus(right.result.literal))
+    } else {
+      Add(left.result, right.result)
+    }
     if (left.result !is NumericLiteral)
       throw Exception("left should produce a concrete value")
     if (right.result !is NumericLiteral)
@@ -101,7 +107,7 @@ data class Add(val left: ArithmeticExpression, val right: ArithmeticExpression) 
         left as ArithmeticExpressionOk,
         right as ArithmeticExpressionOk,
         this,
-        NumericLiteral(left.result.literal.plus(right.result.literal)))
+        resultExp)
   }
 
   override fun toString(): String = "($left + $right)"
