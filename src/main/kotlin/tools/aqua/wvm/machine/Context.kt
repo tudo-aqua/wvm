@@ -28,10 +28,12 @@ data class Context(
     val pre: BooleanExpression = True,
     val post: BooleanExpression = True,
     var input: Scanner? = null,
-    val symbolic: Boolean = false
 ) {
-  fun execute(verbose: Boolean, output: Output = Output(), maxSteps: Int = -1): ExecutionTree {
-    val initialCfg = Configuration(SequenceOfStatements(program), scope, initMemForScope())
+  fun execute(verbose: Boolean,
+              symbolic: Boolean,
+              output: Output = Output(),
+              maxSteps: Int = -1): ExecutionTree {
+    val initialCfg = Configuration(SequenceOfStatements(program), scope, initMemForScope(symbolic))
     val root = ExecutionTree(mutableMapOf(), initialCfg)
     var wl = mutableListOf(root)
 
@@ -50,7 +52,7 @@ data class Context(
         output.println("Terminated abnormally.")
         break
       }
-      val steps = listOf(cfg.statements.head().execute(cfg, input))
+      val steps = cfg.statements.head().execute(cfg, input, symbolic)
       for(step in steps) {
         if (step.result.output != null && !symbolic && !verbose) {
           output.println(step.result.output)
@@ -67,11 +69,26 @@ data class Context(
     return root
   }
 
-  private fun initMemForScope(): Memory<ArithmeticExpression> {
+  private fun initMemForScope(symbolic: Boolean): Memory<ArithmeticExpression> {
     var mem = Memory(Array(scope.size) { NumericLiteral(BigInteger.ZERO) as ArithmeticExpression })
     scope.symbols.values
-        .filter { it.size > 1 }
-        .forEach { mem = mem.write(it.address, NumericLiteral(it.address.toBigInteger().plus(BigInteger.ONE))) }
+      .filter { it.size > 1 }
+      .forEach { mem = mem.write(it.address, NumericLiteral(it.address.toBigInteger().plus(BigInteger.ONE))) }
+    if (symbolic) {
+      for ((v,info) in scope.symbols) {
+        val base = info.address
+        for (offset in 0 ..info.size - 1) {
+          val symbolicValue = "$v$offset"
+          if (info.size == 1 || offset != 0) {
+            mem = mem.write(base + offset, ValAtAddr(Variable(symbolicValue)))
+          }
+        }
+      }
+    }
+//    scope.symbols.forEach {
+//      println("${it.key} -> ${it.value.type} of size ${it.value.size} at ${it.value.address}")
+//    }
+//    println(mem)
     return mem
   }
 

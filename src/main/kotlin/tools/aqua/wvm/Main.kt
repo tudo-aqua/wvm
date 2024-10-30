@@ -33,11 +33,17 @@ import tools.aqua.wvm.parser.Parser
 
 class While : CliktCommand() {
 
-  private val verbose: Boolean by option("-v", "--verbose", help = "enable verbose mode").flag()
+  private val verbose: Boolean by
+    option("-v", "--verbose", help = "enable verbose mode").flag()
 
-  private val run: Boolean by option("-r", "--run", help = "run the code").flag()
+  private val run: Boolean by
+    option("-r", "--run", help = "run the code").flag()
 
-  private val typecheck: Boolean by option("-t", "--typecheck", help = "run type check").flag()
+  private val typecheck: Boolean by
+    option("-t", "--typecheck", help = "run type check").flag()
+
+  private val symbolic: Boolean by
+    option("-s", "--symbolic", help = "run code symbolicly").flag()
 
   private val proof: Boolean by
       option("-p", "--proof", help = "proof (instead of execution)").flag()
@@ -49,7 +55,7 @@ class While : CliktCommand() {
 
   override fun run() {
 
-    if (!run && !typecheck && !proof) {
+    if (!run && !typecheck && !proof && !symbolic) {
       echoFormattedHelp()
       exitProcess(1)
     }
@@ -88,7 +94,7 @@ class While : CliktCommand() {
       }
 
       if (run) {
-        val trace = context.execute(verbose)
+        val trace = context.execute(verbose || symbolic, symbolic)
         if (verbose) {
           println("Execution Tree:")
           print(trace.toIndentString(""))
