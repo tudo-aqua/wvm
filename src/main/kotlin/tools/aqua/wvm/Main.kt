@@ -99,7 +99,17 @@ class While : CliktCommand() {
         val trace = context.execute(verbose || symbolic, symbolic)
         if (verbose) {
           println("Execution Tree:")
-          print(trace.toIndentString(""))
+          print(trace.first.toIndentString(""))
+        }
+        if(symbolic) {
+          if (verbose) {
+            println("Unsafe leaf nodes:")
+            for (leaf in trace.second) {
+              println("====================")
+              println(leaf.toIndentString(""))
+            }
+          }
+          println("The program is ${if (trace.second.isEmpty()) "" else "un"}safe.")
         }
       }
     } catch (e: Exception) {

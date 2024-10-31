@@ -18,6 +18,8 @@
 
 package tools.aqua.wvm.machine
 
+import tools.aqua.wvm.analysis.hoare.SMTSolver
+import tools.aqua.wvm.analysis.semantics.BooleanExpressionError
 import java.math.BigInteger
 import java.util.Scanner
 import tools.aqua.wvm.language.*
@@ -32,8 +34,13 @@ data class Context(
   fun execute(verbose: Boolean,
               symbolic: Boolean,
               output: Output = Output(),
-              maxSteps: Int = -1): ExecutionTree {
-    val initialCfg = Configuration(SequenceOfStatements(program), scope, initMemForScope(symbolic))
+              maxSteps: Int = -1): Pair<ExecutionTree, Set<ExecutionTree>> {
+    val mem = initMemForScope(symbolic)
+    val pathConstraints = pre.evaluate(scope,mem, True)
+    if (pathConstraints.any{it is BooleanExpressionError })
+      throw Exception("Path constraint cannot be evaluated ${pathConstraints.first{it is BooleanExpressionError }}")
+    val pc = pathConstraints.map { it.result }.reduce{ acc, booleanExpression -> And(acc, booleanExpression) }
+    val initialCfg = Configuration(SequenceOfStatements(program), scope, mem,false, pc)
     val root = ExecutionTree(mutableMapOf(), initialCfg)
     var wl = mutableListOf(root)
 
@@ -41,16 +48,16 @@ data class Context(
       val current = wl.first()
       wl = wl.drop(1).toMutableList()
       if (current.cfg.isFinal())
-        break
+        continue
       val cfg = current.cfg
       val stepCount = current.stepCount
       if (maxSteps in 1 ..< stepCount+1) {
         output.println("Terminated after ${maxSteps} steps.")
-        break
+        continue
       }
       if (cfg.error) {
         output.println("Terminated abnormally.")
-        break
+        continue
       }
       val steps = cfg.statements.head().execute(cfg, input, symbolic)
       for(step in steps) {
@@ -66,7 +73,7 @@ data class Context(
     }
 
     if (verbose) println("end.")
-    return root
+    return Pair(root, root.unsafePaths(post))
   }
 
   private fun initMemForScope(symbolic: Boolean): Memory<ArithmeticExpression> {

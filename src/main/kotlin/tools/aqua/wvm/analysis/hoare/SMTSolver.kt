@@ -123,6 +123,7 @@ class SMTSolver {
             (it.name.toString() to it.term.toString())
           } ?: emptyMap()
         seenModels.addLast(model)
+        //println(model)
       } catch (ex: Exception) {
         // todo: produce some output
         println("oops.")

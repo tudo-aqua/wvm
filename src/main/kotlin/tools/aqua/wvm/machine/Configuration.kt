@@ -26,10 +26,10 @@ data class Configuration(
     val scope: Scope,
     val memory: Memory<ArithmeticExpression>,
     val error: Boolean = false,
-    val pathConstraint: BooleanExpression = True
+    val pathConstraint: BooleanExpression
 ) {
 
   fun isFinal() = statements.isExhausted()
 
-  override fun toString(): String = "${memory.toString()} under $pathConstraint"
+  override fun toString(): String = "${memory.toString()} ${if (error) "in error configuration " else ""}under $pathConstraint"
 }

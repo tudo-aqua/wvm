@@ -18,6 +18,8 @@
 
 package tools.aqua.wvm.language
 
+import tools.aqua.konstraints.smt.SatStatus
+import tools.aqua.wvm.analysis.hoare.SMTSolver
 import java.math.BigInteger
 import java.util.Scanner
 import kotlin.random.Random
@@ -38,36 +40,57 @@ data class Assignment(val addr: AddressExpression, val expr: ArithmeticExpressio
   override fun execute(cfg: Configuration,
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
-    val a = addr.evaluate(cfg.scope, cfg.memory)
-    val e = expr.evaluate(cfg.scope, cfg.memory)
-
-    if (a is Error)
-        return listOf(NestedStatementError(
-            "AssErr",
-            a,
+    val apps = mutableListOf<StatementApp>()
+    for (a in addr.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
+      for (e in expr.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
+        if (a is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "AssErr",
+              a,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(a.pc, e.pc))
+              ),
+              And(a.pc, e.pc)
+            )
+          )
+          continue
+        }
+        if (e is Error) {
+          apps.addLast(
+            NestedStatementError(
+              "AssErr",
+              e,
+              this,
+              Transition(
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(a.pc, e.pc))
+              ),
+              And(a.pc, e.pc)
+            )
+          )
+          continue
+        }
+        apps.addLast(
+          AssOk(
+            a as AddressOk,
+            e as ArithmeticExpressionOk,
             this,
             Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    if (e is Error)
-        return listOf(NestedStatementError(
-            "AssErr",
-            e,
-            this,
-            Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
-
-    return listOf(AssOk(
-        a as AddressOk,
-        e as ArithmeticExpressionOk,
-        this,
-        Transition(
-            cfg,
-            dst =
-                Configuration(
-                    SequenceOfStatements(cfg.statements.tail()),
-                    cfg.scope,
-                    cfg.memory.write(a.result, e.result)))))
+              cfg,
+              dst =
+              Configuration(
+                SequenceOfStatements(cfg.statements.tail()),
+                cfg.scope,
+                cfg.memory.write(a.result, e.result), false, And(a.pc, e.pc)
+              )
+            ),
+            And(a.pc, e.pc)
+          )
+        )
+      }
+    }
+    return apps
   }
 
   override fun toIndentedString(indent: String) = "${indent}$addr := $expr;\n"
@@ -79,8 +102,8 @@ data class Swap(val left: AddressExpression, val right: AddressExpression) : Sta
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
     val apps = mutableListOf<StatementApp>()
-    for (a1 in left.evaluate(cfg.scope, cfg.memory)) {
-      for (a2 in right.evaluate(cfg.scope, cfg.memory)) {
+    for (a1 in left.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
+      for (a2 in right.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
         if (a1 is Error) {
           apps.addLast(
             NestedStatementError(
@@ -88,8 +111,9 @@ data class Swap(val left: AddressExpression, val right: AddressExpression) : Sta
               a1,
               this,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(a1.pc, a2.pc))
+              ),
+              And(a1.pc, a2.pc)
             )
           )
           continue
@@ -101,8 +125,9 @@ data class Swap(val left: AddressExpression, val right: AddressExpression) : Sta
               a2,
               this,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(a1.pc, a2.pc))
+              ),
+              And(a1.pc, a2.pc)
             )
           )
           continue
@@ -121,9 +146,11 @@ data class Swap(val left: AddressExpression, val right: AddressExpression) : Sta
               Configuration(
                 SequenceOfStatements(cfg.statements.tail()),
                 cfg.scope,
-                cfg.memory.write(a1.result, e2).write(a2.result, e1)
+                cfg.memory.write(a1.result, e2).write(a2.result, e1),
+                false, And(a1.pc, a2.pc)
               )
-            )
+            ),
+            And(a1.pc, a2.pc)
           )
         )
       }
@@ -140,7 +167,7 @@ data class Assertion(val cond: BooleanExpression) : Statement {
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
     val apps = mutableListOf<StatementApp>()
-    for (b in cond.evaluate(cfg.scope, cfg.memory)) {
+    for (b in cond.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
       if (b is Error) {
         apps.addLast(
           NestedStatementError(
@@ -148,8 +175,9 @@ data class Assertion(val cond: BooleanExpression) : Statement {
             b,
             this,
             Transition(
-              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-            )
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, b.pc)
+            ),
+            b.pc
           )
         )
         continue
@@ -163,9 +191,10 @@ data class Assertion(val cond: BooleanExpression) : Statement {
                 cfg,
                 dst =
                 Configuration(
-                  SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+                  SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, And(b.pc, b.result)
                 )
-              )
+              ),
+              b.pc
             )
           )
 
@@ -174,12 +203,43 @@ data class Assertion(val cond: BooleanExpression) : Statement {
             AssertErr(
               b as BooleanExpressionOk,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true, And(b.pc, b.result))
+              ),
+              b.pc
             )
           )
 
-        else -> throw Exception("Symbolic Assertions not handled yet")
+        else -> {
+          val smtSolver = SMTSolver()
+          val constraint = And(cfg.pathConstraint, Not(b.result))
+          val result = smtSolver.solve(constraint)
+          if (result.status == SatStatus.UNSAT) {
+            apps.addLast(
+              AssertOK(
+                b as BooleanExpressionOk,
+                Transition(
+                  cfg,
+                  dst =
+                  Configuration(
+                    SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, b.pc
+                  )
+                ),
+                b.pc
+              )
+            )
+          } else {
+            apps.addLast(
+              AssertErr(
+                b as BooleanExpressionOk,
+                Transition(
+                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true, b.pc)
+                ),
+                b.pc
+              )
+            )
+
+          }
+        }
       }
     }
     return apps
@@ -198,7 +258,7 @@ data class IfThenElse(
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
     val apps = mutableListOf<StatementApp>()
-    for (b in cond.evaluate(cfg.scope, cfg.memory)) {
+    for (b in cond.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
       if (b is Error) {
         apps.addLast(
           NestedStatementError(
@@ -206,8 +266,9 @@ data class IfThenElse(
             b,
             this,
             Transition(
-              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-            )
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, b.pc)
+            ),
+            b.pc
           )
         )
         continue
@@ -224,9 +285,12 @@ data class IfThenElse(
                 Configuration(
                   concat(thenBlock.statements, cfg.statements.tail()),
                   cfg.scope,
-                  cfg.memory
+                  cfg.memory,
+                  false,
+                  b.pc
                 )
-              )
+              ),
+              b.pc
             )
           )
 
@@ -241,13 +305,64 @@ data class IfThenElse(
                 Configuration(
                   concat(elseBlock.statements, cfg.statements.tail()),
                   cfg.scope,
-                  cfg.memory
+                  cfg.memory,
+                  false,
+                  b.pc
                 )
-              )
+              ),
+              b.pc
             )
           )
 
-        else -> throw Exception("Symbolic If-Condition not handled yet")
+        else -> {
+          val smtSolver1 = SMTSolver()
+          val constraint1 = And(b.pc, b.result)
+          val result1 = smtSolver1.solve(constraint1)
+          if (result1.status == SatStatus.SAT) {
+            apps.addLast(
+              IfTrue(
+                b as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg,
+                  dst =
+                  Configuration(
+                    concat(thenBlock.statements, cfg.statements.tail()),
+                    cfg.scope,
+                    cfg.memory,
+                    false,
+                    And(b.pc, b.result)
+                  )
+                ),
+                And(b.pc, b.result)
+              )
+            )
+          }
+          val smtSolver2 = SMTSolver()
+          val constraint2 = And(b.pc, Not(b.result))
+          val result2 = smtSolver2.solve(constraint2)
+          if (result2.status == SatStatus.SAT) {
+            apps.addLast(
+              IfFalse(
+                b as BooleanExpressionOk,
+                this,
+                Transition(
+                  cfg,
+                  dst =
+                  Configuration(
+                    concat(elseBlock.statements, cfg.statements.tail()),
+                    cfg.scope,
+                    cfg.memory,
+                    false,
+                    And(b.pc, Not(b.result))
+                  )
+                ),
+                And(b.pc, Not(b.result))
+              )
+            )
+
+          }
+        }
       }
     }
     return apps
@@ -271,9 +386,8 @@ data class While(
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
     val apps = mutableListOf<StatementApp>()
-    for (cond in head.evaluate(cfg.scope, cfg.memory)) {
-      for (invar in invariant.evaluate(cfg.scope, cfg.memory)) {
-
+    for (cond in head.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
+      for (invar in invariant.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
         if (cond is Error) {
           apps.addLast(
             NestedStatementError(
@@ -281,8 +395,9 @@ data class While(
               cond,
               this,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cond.pc, invar.pc))
+              ),
+              And(cond.pc, invar.pc)
             )
           )
           continue
@@ -294,8 +409,9 @@ data class While(
               invar,
               this,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cond.pc, invar.pc))
+              ),
+              And(cond.pc, invar.pc)
             )
           )
           continue
@@ -311,9 +427,10 @@ data class While(
                   cfg,
                   dst =
                   Configuration(
-                    concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory
+                    concat(body.statements, cfg.statements.statements), cfg.scope, cfg.memory, false, And(cond.pc, invar.pc)
                   )
-                )
+                ),
+                And(cond.pc, invar.pc)
               )
             )
 
@@ -327,9 +444,10 @@ data class While(
                   cfg,
                   dst =
                   Configuration(
-                    SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory
+                    SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, And(cond.pc, invar.pc)
                   )
-                )
+                ),
+                And(cond.pc, invar.pc)
               )
             )
 
@@ -340,8 +458,9 @@ data class While(
                 invar as BooleanExpressionOk,
                 this,
                 Transition(
-                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-                )
+                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cond.pc, invar.pc))
+                ),
+                And(cond.pc, invar.pc)
               )
             )
 
@@ -352,12 +471,125 @@ data class While(
                 invar as BooleanExpressionOk,
                 this,
                 Transition(
-                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-                )
+                  cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cond.pc, invar.pc))
+                ),
+                And(cond.pc, invar.pc)
               )
             )
 
-          else -> throw Exception("Symbolic If-Condition not handled yet")
+          else -> {
+            val smtSolver1 = SMTSolver()
+            val constraint1 = And(cfg.pathConstraint, cond.result)
+            val result1 = smtSolver1.solve(constraint1)
+            val smtSolver2 = SMTSolver()
+            val constraint2 = And(cfg.pathConstraint, Not(invar.result))
+            val result2 = smtSolver2.solve(constraint2)
+            when((result1.status == SatStatus.SAT) to (result2.status == SatStatus.UNSAT)){
+              true to true -> {
+                apps.addLast(
+                  WhTrue(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg,
+                      dst =
+                      Configuration(
+                        concat(body.statements, cfg.statements.statements),
+                        cfg.scope,
+                        cfg.memory,
+                        false,
+                        And(cond.pc, invar.pc)
+                      )
+                    ),
+                    And(cond.pc, invar.pc)
+                  )
+                )
+              }
+              false to true ->
+                apps.addLast(
+                  WhFalse(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg,
+                      dst =
+                      Configuration(
+                        SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, And(cfg.pathConstraint, And(invar.pc, Not(cond.result)))
+                      )
+                    ),
+                    And(cfg.pathConstraint, And(invar.pc, Not(cond.result)))
+                  )
+                )
+              true to false ->
+                apps.addLast(
+                  WhInvar(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cond.pc, Not(invar.result)))
+                    ),
+                    And(cond.pc, Not(invar.result))
+                  )
+                )
+              false to false ->
+                apps.addLast(
+                  WhInvar(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cfg.pathConstraint, And(Not(invar.result), Not(cond.result))))
+                    ),
+                    And(cfg.pathConstraint, And(Not(invar.result), Not(cond.result)))
+                  )
+                )
+            }
+            val smtSolver3 = SMTSolver()
+            val constraint3 = And(cfg.pathConstraint, Not(cond.result))
+            val result3 = smtSolver3.solve(constraint3)
+            val smtSolver4 = SMTSolver()
+            val constraint4 = And(cfg.pathConstraint, Not(invar.result))
+            val result4 = smtSolver4.solve(constraint4)
+            when((result3.status == SatStatus.SAT) to (result4.status == SatStatus.UNSAT)){
+              true to true ->
+                apps.addLast(
+                  WhFalse(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg,
+                      dst =
+                      Configuration(
+                        SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, And(cfg.pathConstraint, And(invar.pc,Not(cond.result)))
+                      )
+                    ),
+                    And(cfg.pathConstraint, And(invar.pc,Not(cond.result)))
+                  )
+                )
+              false to true ->{
+
+              }
+              true to false ->
+                apps.addLast(
+                  WhInvar(
+                    cond as BooleanExpressionOk,
+                    invar as BooleanExpressionOk,
+                    this,
+                    Transition(
+                      cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, And(cfg.pathConstraint, And(Not(invar.result), Not(cond.result))))
+                    ),
+                    And(cfg.pathConstraint, And(Not(invar.result), Not(cond.result)))
+                  )
+                )
+              false to false -> {
+
+              }
+            }
+          }
         }
       }
     }
@@ -395,21 +627,24 @@ data class Print(val message: String, val values: List<ArithmeticExpression>) : 
     val valuesL = mutableListOf<MutableList<Application<ArithmeticExpression>>>()
     for (v in values) {
       valuesL.addLast(mutableListOf())
-      for (e in v.evaluate(cfg.scope, cfg.memory)) {
+      for (e in v.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
         valuesL.last().addLast(e)
       }
     }
     val valueCombinations = valuesL.multiply()
     val apps = mutableListOf<StatementApp>()
     for (comb in valueCombinations) {
+      val combPC = comb.map {it.pc}.reduce { acc, exp -> And(acc,exp) }
       if (comb.any { it is Error }) {
         apps.addLast(NestedStatementError(
           "PrintErr",
           comb.first { it is Error } as Error,
           this,
           Transition(
-            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-          )))
+            cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, combPC)
+          ),
+          combPC
+        ))
         continue
       }
 
@@ -425,8 +660,9 @@ data class Print(val message: String, val values: List<ArithmeticExpression>) : 
             cfg,
             output = out,
             dst =
-            Configuration(SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory)
-          )
+            Configuration(SequenceOfStatements(cfg.statements.tail()), cfg.scope, cfg.memory, false, combPC)
+          ),
+          combPC
         )
       )
     }
@@ -453,8 +689,7 @@ data class Havoc(
                        input: Scanner?,
                        symbolic: Boolean): List<StatementApp> {
     val apps = mutableListOf<StatementApp>()
-
-    for (a in addr.evaluate(cfg.scope, cfg.memory)) {
+    for (a in addr.evaluate(cfg.scope, cfg.memory, cfg.pathConstraint)) {
       if (a is Error) {
         apps.addLast(
           NestedStatementError(
@@ -462,8 +697,9 @@ data class Havoc(
             a,
             this,
             Transition(
-              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-            )
+              cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, a.pc)
+            ),
+            a.pc
           )
         )
         continue
@@ -477,8 +713,9 @@ data class Havoc(
               a as AddressOk,
               this,
               Transition(
-                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true)
-              )
+                cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, a.pc)
+              ),
+              a.pc
             )
           )
         else
@@ -493,9 +730,12 @@ data class Havoc(
                 Configuration(
                   SequenceOfStatements(cfg.statements.tail()),
                   cfg.scope,
-                  cfg.memory.write(a.result, NumericLiteral(number))
+                  cfg.memory.write(a.result, NumericLiteral(number)),
+                  false,
+                  a.pc
                 )
-              )
+              ),
+              a.pc
             )
           )
       }
@@ -513,9 +753,20 @@ data class Havoc(
               Configuration(
                 SequenceOfStatements(cfg.statements.tail()),
                 cfg.scope,
-                cfg.memory.write(a.result, ValAtAddr(Variable(symbolName)))
+                cfg.memory.write(a.result, ValAtAddr(Variable(symbolName))),
+                false,
+                And(
+                  a.pc,
+                  And(
+                    Lte(NumericLiteral(lower),ValAtAddr(Variable(symbolName))),
+                    Gt(NumericLiteral(upper),ValAtAddr(Variable(symbolName)))))
               )
-            )
+            ),
+            And(
+              a.pc,
+              And(
+                Gte(NumericLiteral(lower),ValAtAddr(Variable(symbolName))),
+                Lte(NumericLiteral(upper),ValAtAddr(Variable(symbolName)))))
           )
         )
       }
@@ -536,7 +787,8 @@ data class Fail(val message: String) : Statement {
           Transition(
               cfg,
               output = "Fail with message: $message",
-              dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true))))
+              dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, true, cfg.pathConstraint)),
+        cfg.pathConstraint))
 
   override fun toIndentedString(indent: String) = "fail \"$message\"\n"
 }
