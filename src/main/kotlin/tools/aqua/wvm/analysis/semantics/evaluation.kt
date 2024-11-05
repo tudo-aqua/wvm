@@ -269,9 +269,9 @@ class AssOk(
 class SwapOk(val a1: AddressOk, val a2: AddressOk, val swap: Swap, trans: Transition, pc: BooleanExpression) :
     StatementOk(trans,pc)
 
-class AssertOK(val expr: BooleanExpressionOk, trans: Transition,pc: BooleanExpression) : StatementOk(trans,pc)
+class AssertOK(val stmt: Assertion, val expr: BooleanExpressionOk, trans: Transition,pc: BooleanExpression) : StatementOk(trans,pc)
 
-class AssertErr(val expr: BooleanExpressionOk, trans: Transition,pc: BooleanExpression) : StatementOk(trans, pc)
+class AssertErr(val stmt: Assertion, val expr: BooleanExpressionOk, trans: Transition,pc: BooleanExpression) : StatementOk(trans, pc)
 
 class IfTrue(val b: BooleanExpressionOk, val ifThenElse: IfThenElse, trans: Transition, pc: BooleanExpression) :
     StatementOk(trans,pc)

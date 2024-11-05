@@ -46,4 +46,10 @@ data class ExecutionTree(
         .reduce {acc, s -> acc + s}
     }
   }
+
+  fun flatten() : List<StatementApp> {
+    if (next.size == 0) return listOf()
+    if (next.size != 1) throw Exception("Execution Tree of size ${next.size} cannot be flatten.")
+    return next.keys.toList() + next.values.first().flatten()
+  }
 }

@@ -186,6 +186,7 @@ data class Assertion(val cond: BooleanExpression) : Statement {
         True ->
           apps.addLast(
             AssertOK(
+              this,
               b as BooleanExpressionOk,
               Transition(
                 cfg,
@@ -201,6 +202,7 @@ data class Assertion(val cond: BooleanExpression) : Statement {
         False ->
           apps.addLast(
             AssertErr(
+              this,
               b as BooleanExpressionOk,
               Transition(
                 cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true, And(b.pc, b.result))
@@ -216,6 +218,7 @@ data class Assertion(val cond: BooleanExpression) : Statement {
           if (result.status == SatStatus.UNSAT) {
             apps.addLast(
               AssertOK(
+                this,
                 b as BooleanExpressionOk,
                 Transition(
                   cfg,
@@ -230,6 +233,7 @@ data class Assertion(val cond: BooleanExpression) : Statement {
           } else {
             apps.addLast(
               AssertErr(
+                this,
                 b as BooleanExpressionOk,
                 Transition(
                   cfg, dst = Configuration(SequenceOfStatements(), cfg.scope, cfg.memory, error = true, b.pc)

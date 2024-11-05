@@ -73,7 +73,12 @@ data class Context(
     }
 
     if (verbose) println("end.")
-    return Pair(root, root.unsafePaths(post))
+    print(root.flatten().size)
+    if (symbolic) {
+      return Pair(root, root.unsafePaths(post))
+    } else {
+      return Pair(root, setOf())
+    }
   }
 
   private fun initMemForScope(symbolic: Boolean): Memory<ArithmeticExpression> {
